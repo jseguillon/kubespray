@@ -1,0 +1,73 @@
+# -*- mode: ruby -*-
+# vim: ft=ruby
+
+# Thanks to : https://github.com/debops/examples/blob/master/vagrant-multi-machine/Vagrantfile ! 
+
+
+# This script is used to create multiple VMs with vagrant on Win 10 laptop
+
+# I use ubuntu vm for dev
+# But must launch vragrant into power shell :) 
+
+
+# Network configuration
+DOMAIN            = ".k8s.local"
+# Box
+UBUNTU_BOX               = "generic/ubuntu1804"
+
+# I use create static MAC adresses because dynamic mac adress (default in hyperv) is painfull with kubernetes 
+# HOSTS = {
+#   "name" => [mac, cpus, mem, box],
+# }
+
+# a lot of memory :) 
+# this will take ... some time 
+# let's check memory 
+# Everything is ok so far 
+# 51 plus a last node with 8 => okay I have enough mem 
+# \0/ 
+
+# next step => launch kubespray 
+# stay tuned ! 
+
+HOSTS = {
+   "etcd-1" => ["020000000001", 2, 4096, UBUNTU_BOX],
+   "etcd-2" => ["020000000002", 2, 4096, UBUNTU_BOX],
+   "master-node-etcd-1" => ["020000000012", 4, 8192, UBUNTU_BOX],
+   "master-1" => ["020000000021", 2, 4096, UBUNTU_BOX],
+   "master-2" => ["020000000022", 2, 4096, UBUNTU_BOX],
+   "node-1" => [ "020000000031", 4, 8192, UBUNTU_BOX],
+   "node-2" => [ "020000000032", 4, 8192, UBUNTU_BOX],
+}
+   
+
+ANSIBLE_INVENTORY_DIR = 'ansible/inventory'
+
+# ---- Vagrant configuration ----
+
+Vagrant.configure(2) do |config|
+  HOSTS.each do | (name, cfg) |
+    mac, cpus, ram, box = cfg
+
+    config.vm.define name do |machine|
+      machine.vm.box   = box
+
+      machine.vm.provider "hyperv" do |hv|
+        hv.memory = ram
+        hv.maxmemory = ram
+        hv.cpus = cpus
+		hv.mac = mac
+      end
+
+    config.vm.provision "file", source: "id_rsa.pub", destination: "/home/vagrant/.ssh/me.pub"
+
+    config.vm.provision "shell", privileged: false, inline: <<-SHELL
+cat /home/vagrant/.ssh/me.pub >> /home/vagrant/.ssh/authorized_keys 
+SHELL
+
+      machine.vm.hostname = name + DOMAIN
+      #machine.vm.network 'private_network', ip: ipaddr, netmask: NETMASK
+    end
+  end # HOSTS-each
+end
+
