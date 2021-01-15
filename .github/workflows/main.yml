@@ -18,18 +18,45 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ansible-lint
+          - name: yaml lint
             command: yamllint --strict .
-
+            install_requirements: true
+            # TODO except: ['triggers', 'master'] from gitlab-ci does not fit very well matrix as defined by github ?
+            # as from lint.yml : this except should apply on every step
           - name: vagrant validate
             command: |
               export VAGRANT_VERSION
               sudo -E bash -c "${PWD}/tests/scripts/vagrant-validate.sh"
               echo done
 
-          # - name: markdown lint
+          - name: ansible-lint
+            command: |-
+                grep -Rl '^- hosts: \|^  hosts: ' --include \*.yml --include \*.yaml . | xargs -P 4 -n 25 ansible-lint -v
+            install_requirements: true
 
-          # - name: and other stuffs...
+          - name: syntax-check
+            inventory: inventory/local-tests.cfg
+            command: |
+              ansible-playbook --syntax-check cluster.yml
+              ansible-playbook --syntax-check upgrade-cluster.yml
+              ansible-playbook --syntax-check reset.yml
+              ansible-playbook --syntax-check extra_playbooks/upgrade-only-k8s.yml
+            install_requirements: true
+
+          # FIXME :no py 3.3 avalaible ing github (could be enabled)
+          # - name: tox-inventory-builder
+          #   command: |
+          #     pip3 install tox
+          #     cd contrib/inventory_builder && tox
+
+          - name: markdownlint
+            command: |
+              sudo npm install -g markdownlint-cli@0.22.0
+              markdownlint $(find . -name '*.md' | grep -vF './.git') --ignore docs/_sidebar.md --ignore contrib/dind/README.md
+
+          - name: ci-matrix
+            commande: |
+              tests/scripts/md-table/test.sh
     env:
       VAGRANT_VERSION: 2.2.10
       KUBESPRAY_VERSION: v2.14.1
@@ -37,13 +64,19 @@ jobs:
       SSH_USER: root
       MITOGEN_ENABLE: "false"
       ANSIBLE_LOG_LEVEL: "-vv"
+      ANSIBLE_REMOTE_USER: root
+      ANSIBLE_BECOME: "true"
+      ANSIBLE_BECOME_USER: root
+      ANSIBLE_VERBOSITY: "3"
     steps:
       - name: Check out code
         uses: actions/checkout@v2
 
       - name: Install a default Python
         uses: actions/setup-python@v2
-
+        with:
+          python-version: "3.x"
+          architecture: x64
       - name: Install dependencies
         run: |
           echo do some python -m pip install if needed
@@ -59,11 +92,70 @@ jobs:
       - name: Install requirements
         run: |
           python -m pip install -r tests/requirements.txt
-        # TODO : when requirements wanted
+        if: ${{ contains(matrix.install_requirements, 'true') }}
 
       - name: Run command
         run: |
           ${{ matrix.command }}
+        env:
+          ANSIBLE_INVENTORY: ${{ matrix.inventory }}
+
+  validate_tf:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-20.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tf_version: 0.12.29
+            provider: openstack
+
+          - tf_version: 0.12.29
+            provider: packet
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Install a default Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.x"
+          architecture: x64
+
+      # - name: Rebase
+      #   run: |
+      #     # FIXME need CI_REF_SLUG
+      #     # ./tests/scripts/rebase.sh
+
+      - name: Install Terraform
+        run: |
+          sudo bash -c "PROVIDER=${PROVIDER} TF_VERSION=${TF_VERSION} ./tests/scripts/testcases_prepare.sh"
+          sudo sudo bash -c "PROVIDER=${PROVIDER} TF_VERSION=${TF_VERSION} ./tests/scripts/terraform_install.sh"
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          TF_VERSION: ${{ matrix.tf_version }}
+
+      - name: Setup test config
+        run: |
+          # Set Ansible config
+          cp ansible.cfg ~/.ansible.cfg
+          # Prepare inventory
+          cp contrib/terraform/$PROVIDER/sample-inventory/cluster.tfvars .
+          ln -s contrib/terraform/$PROVIDER/hosts
+          terraform init contrib/terraform/$PROVIDER
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          TF_VERSION: ${{ matrix.tf_version }}
+
+      - name: Validate Teraforms
+        run: |
+          terraform validate -var-file=cluster.tfvars contrib/terraform/$PROVIDER
+          terraform fmt -check -diff contrib/terraform/$PROVIDER
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          TF_VERSION: ${{ matrix.tf_version }}
 
   build:
     name: ${{ matrix.name }}
