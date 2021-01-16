@@ -43,7 +43,7 @@ jobs:
               ansible-playbook --syntax-check extra_playbooks/upgrade-only-k8s.yml
             install_requirements: true
 
-          # FIXME :no py 3.3 avalaible ing github (could be enabled)
+          # FIXME :no py 3.3 avalaible in github (could be enabled)
           # - name: tox-inventory-builder
           #   command: |
           #     pip3 install tox
@@ -101,18 +101,15 @@ jobs:
           ANSIBLE_INVENTORY: ${{ matrix.inventory }}
 
   validate_tf:
-    name: ${{ matrix.name }}
+    name: Validate tf ${{ matrix.tf_version }} - ${{ matrix.provider }}
     runs-on: ubuntu-20.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - tf_version: 0.12.29
-            provider: openstack
-
-          - tf_version: 0.12.29
-            provider: packet
+        tf_version: [0.12.29, 0.13.5, 0.14.3]
+        # FIXME before merge : packet requires auth_token
+        provider: [openstack, aws]
 
     steps:
       - name: Check out code
@@ -388,3 +385,4 @@ jobs:
           path: /tmp/kind/logs
     needs:
       - validate_code
+      - validate_tf
