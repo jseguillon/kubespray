@@ -154,7 +154,7 @@ jobs:
           PROVIDER: ${{ matrix.provider }}
           TF_VERSION: ${{ matrix.tf_version }}
 
-  build:
+  kubevirt:
     name: ${{ matrix.name }}
     runs-on: ubuntu-20.04
     timeout-minutes: 30
@@ -168,6 +168,8 @@ jobs:
           - name: kubevirt ubuntu xxx
             log_dir: /tmp/ubuntu18-xxx-${{ github.run_id }}/logs
     env:
+      VIRT_KUBERNETES_VERSION: v1.19.1
+      VIRT_KINDEST_VERSION: v1.19.1@sha256:98cf5288864662e37115e362b23e4369c8c4a408f99cbc06e58ac30ddc721600
       KUBESPRAY_VERSION: v2.14.1
       ANSIBLE_FORCE_COLOR: "true"
       SSH_USER: root
@@ -180,7 +182,7 @@ jobs:
 
       - name: Install a default Python
         uses: actions/setup-python@v2
-        # TODO version
+        # TODO version (if really needed ?)
 
       - name: Enable ipv4 and ipv6 forwarding
         run: |
@@ -225,7 +227,7 @@ jobs:
 
       - name: Install kubectl
         run: |
-          curl -LO https://storage.googleapis.com/kubernetes-release/release/${{ matrix.KUBERNETES_VERSION }}/bin/linux/amd64/kubectl; chmod +x ./kubectl
+          curl -LO https://storage.googleapis.com/kubernetes-release/release/${VIRT_KUBERNETES_VERSION}/bin/linux/amd64/kubectl; chmod +x ./kubectl
           sudo install kubectl /usr/local/bin
 
 
@@ -242,6 +244,8 @@ jobs:
           apiVersion: kind.x-k8s.io/v1alpha4
           networking:
             ipFamily: ipv4
+          nodes:
+          - image: kindest/node:${VIRT_KINDEST_VERSION}
           EOF
 
 
@@ -368,6 +372,95 @@ jobs:
           LOG_DIR: ${{ matrix.log_dir }}
 
       - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: molecule-kubevirt-${{ matrix.tox_env }}-${{ env.JOB_NAME }}-${{ github.run_id }}
+          path: ${{ matrix.log_dir }}
+    needs:
+      - validate_code
+      - validate_tf
+
+  vagrant:
+    name: ${{ matrix.ci_job_name }}
+    runs-on: ubuntu-20.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ci_job_name: vagrant_ubuntu18-flannel
+            log_dir: /tmp/vagrant_ubuntu18-flannel-${{ github.run_id }}/logs
+
+          - ci_job_name: vagrant_ubuntu18-weave-medium
+            log_dir: /tmp/vagrant_ubuntu18-weave-medium-${{ github.run_id }}/logs
+
+          - ci_job_name: vagrant_ubuntu20-flannel
+            log_dir: /tmp/vagrant_ubuntu20-flannel-${{ github.run_id }}/logs
+    env:
+      CI_PLATFORM: "vagrant"
+      SSH_USER: "vagrant"
+      VAGRANT_DEFAULT_PROVIDER: "libvirt"
+      VAGRANT_VERSION: 2.2.10
+      UPGRADE_TEST: "false"
+      ANSIBLE_LOG_LEVEL: "-vv"
+      IDEMPOT_CHECK: "false"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Install a default Python
+        uses: actions/setup-python@v2
+        # TODO version (if really needed ?)
+        # update-alternatives --install /usr/bin/python python /usr/bin/python3 10
+
+      - name: Install vagrant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget libvirt-dev openssh-client rsync git
+          wget https://releases.hashicorp.com/vagrant/${VAGRANT_VERSION}/vagrant_${VAGRANT_VERSION}_x86_64.deb
+          sudo dpkg -i vagrant_${VAGRANT_VERSION}_x86_64.deb
+          sudo vagrant plugin install vagrant-libvirt
+
+      - name: Setup test environment
+        run: |
+          apt-get install -y python3-pip
+          python -m pip install -r tests/requirements.txt
+          # FIXME : no need in github ?./tests/scripts/vagrant_clean.sh
+
+      - name: Launch vagrant test
+        run: >-
+          sudo bash -c "
+           KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
+           CI_JOB_NAME=${CI_JOB_NAME}
+           MITOGEN_ENABLE=${MITOGEN_ENABLE}
+           UPGRADE_TEST=${UPGRADE_TEST}
+           KUBESPRAY_VAGRANT_CONFIG=${KUBESPRAY_VAGRANT_CONFIG}
+           CI_TEST_VARS=${CI_TEST_VARS}
+           SSH_USER=${SSH_USER}
+           VAGRANT_DEFAULT_PROVIDER=${VAGRANT_DEFAULT_PROVIDER}
+           VAGRANT_VERSION=${VAGRANT_VERSION}
+           ANSIBLE_LOG_LEVEL: "-vv"
+           IDEMPOT_CHECK: "false"
+           ./tests/scripts/testcases_run.sh"
+
+      - name: Just echo to test
+        run: >-
+          sudo bash -c "
+           KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
+           CI_JOB_NAME=${CI_JOB_NAME}
+           MITOGEN_ENABLE=${MITOGEN_ENABLE}
+           UPGRADE_TEST=${UPGRADE_TEST}
+           KUBESPRAY_VAGRANT_CONFIG=${KUBESPRAY_VAGRANT_CONFIG}
+           CI_TEST_VARS=${CI_TEST_VARS}
+           SSH_USER=${SSH_USER}
+           VAGRANT_DEFAULT_PROVIDER=${VAGRANT_DEFAULT_PROVIDER}
+           VAGRANT_VERSION=${VAGRANT_VERSION}
+           ANSIBLE_LOG_LEVEL: "-vv"
+           IDEMPOT_CHECK: "false"
+           ./tests/scripts/testcases_run.sh"
+
+      - name: Upload logs 2
         if: always()
         uses: actions/upload-artifact@v2
         with:
