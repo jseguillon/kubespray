@@ -421,6 +421,7 @@ jobs:
           sudo apt-get build-dep vagrant ruby-libvirt
           sudo apt-get install qemu libvirt-daemon-system libvirt-clients ebtables dnsmasq-base
           sudo apt-get install libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev
+          sudo apt-get install qemu libvirt-daemon-system libvirt-clients libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev ruby-libvirt ebtables dnsmasq-base
           wget https://releases.hashicorp.com/vagrant/${VAGRANT_VERSION}/vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo dpkg -i vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo vagrant plugin install vagrant-libvirt
