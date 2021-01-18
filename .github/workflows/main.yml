@@ -416,7 +416,7 @@ jobs:
 
       - name: Install vagrant
         run: |
-          sudo sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list   
+          sudo sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
           sudo apt-get update
           sudo apt-get build-dep vagrant ruby-libvirt
           sudo apt-get install qemu libvirt-daemon-system libvirt-clients ebtables dnsmasq-base
