@@ -58,7 +58,7 @@ jobs:
             commande: |
               tests/scripts/md-table/test.sh
     env:
-      VAGRANT_VERSION: 2.2.10
+      VAGRANT_VERSION: 2.2.14
       KUBESPRAY_VERSION: v2.14.1
       ANSIBLE_FORCE_COLOR: "true"
       SSH_USER: root
