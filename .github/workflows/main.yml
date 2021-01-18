@@ -432,7 +432,7 @@ jobs:
         run: |
           export KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
           export IDEMPOT_CHECK="false"
-          sudo -E scripts/testcases_run.sh
+          sudo -E tests/scripts/testcases_run.sh
 
       - name: Upload logs 2
         if: always()
