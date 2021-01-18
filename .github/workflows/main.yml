@@ -429,36 +429,10 @@ jobs:
           # FIXME : no need in github ?./tests/scripts/vagrant_clean.sh
 
       - name: Launch vagrant test
-        run: >-
-          sudo bash -c "
-           KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
-           CI_JOB_NAME=${CI_JOB_NAME}
-           MITOGEN_ENABLE=${MITOGEN_ENABLE}
-           UPGRADE_TEST=${UPGRADE_TEST}
-           KUBESPRAY_VAGRANT_CONFIG=${KUBESPRAY_VAGRANT_CONFIG}
-           CI_TEST_VARS=${CI_TEST_VARS}
-           SSH_USER=${SSH_USER}
-           VAGRANT_DEFAULT_PROVIDER=${VAGRANT_DEFAULT_PROVIDER}
-           VAGRANT_VERSION=${VAGRANT_VERSION}
-           ANSIBLE_LOG_LEVEL: "-vv"
-           IDEMPOT_CHECK: "false"
-           ./tests/scripts/testcases_run.sh"
-
-      - name: Just echo to test
-        run: >-
-          sudo bash -c "
-           KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
-           CI_JOB_NAME=${CI_JOB_NAME}
-           MITOGEN_ENABLE=${MITOGEN_ENABLE}
-           UPGRADE_TEST=${UPGRADE_TEST}
-           KUBESPRAY_VAGRANT_CONFIG=${KUBESPRAY_VAGRANT_CONFIG}
-           CI_TEST_VARS=${CI_TEST_VARS}
-           SSH_USER=${SSH_USER}
-           VAGRANT_DEFAULT_PROVIDER=${VAGRANT_DEFAULT_PROVIDER}
-           VAGRANT_VERSION=${VAGRANT_VERSION}
-           ANSIBLE_LOG_LEVEL: "-vv"
-           IDEMPOT_CHECK: "false"
-           ./tests/scripts/testcases_run.sh"
+        run: |
+          export KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
+          export IDEMPOT_CHECK="false"
+          sudo -E /scripts/testcases_run.sh
 
       - name: Upload logs 2
         if: always()
