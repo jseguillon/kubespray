@@ -414,7 +414,7 @@ jobs:
         # TODO version (if really needed ?)
         # update-alternatives --install /usr/bin/python python /usr/bin/python3 10
 
-      - name: Install vagrant
+      - name: Install vagrant deps
         run: |
           sudo sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
           sudo apt-get update
@@ -422,6 +422,18 @@ jobs:
           sudo apt-get install qemu libvirt-daemon-system libvirt-clients ebtables dnsmasq-base
           sudo apt-get install libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev
           sudo apt-get install qemu libvirt-daemon-system libvirt-clients libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev ruby-libvirt ebtables dnsmasq-base
+
+      - name: Tweak Ubuntu apparmor
+        run: |
+          sudo cat /etc/apparmor.d/usr.sbin.libvirtd
+          tweak_qemu_apprarmor="$(head -n -1 /etc/apparmor.d/usr.sbin.libvirtd; echo "  /usr/libexec/qemu-kvm rmix,"; tail -1 /etc/apparmor.d/usr.sbin.libvirtd)"
+          echo "$tweak_qemu_apprarmor"
+          echo "$tweak_qemu_apprarmor" | sudo dd of=/etc/apparmor.d/usr.sbin.libvirtd
+          sudo cat /etc/apparmor.d/usr.sbin.libvirtd
+          sudo systemctl reload apparmor.service
+
+      - name: Final vagrant install
+        run: |
           wget https://releases.hashicorp.com/vagrant/${VAGRANT_VERSION}/vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo dpkg -i vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo vagrant plugin install vagrant-libvirt
