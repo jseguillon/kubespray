@@ -433,6 +433,8 @@ jobs:
           export KUBESPRAY_VAGRANT_CONFIG=tests/files/${CI_JOB_NAME}.rb
           export IDEMPOT_CHECK="false"
           sudo -E tests/scripts/testcases_run.sh
+        env:
+          CI_JOB_NAME: ${{ matrix.ci_job_name }}
 
       - name: Upload logs 2
         if: always()
