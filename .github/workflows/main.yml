@@ -417,7 +417,9 @@ jobs:
       - name: Install vagrant
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget libvirt-dev openssh-client rsync git
+          apt-get build-dep vagrant ruby-libvirt
+          apt-get install qemu libvirt-daemon-system libvirt-clients ebtables dnsmasq-base
+          apt-get install libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev
           wget https://releases.hashicorp.com/vagrant/${VAGRANT_VERSION}/vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo dpkg -i vagrant_${VAGRANT_VERSION}_x86_64.deb
           sudo vagrant plugin install vagrant-libvirt
