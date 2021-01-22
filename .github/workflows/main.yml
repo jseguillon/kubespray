@@ -155,24 +155,20 @@ jobs:
           TF_VERSION: ${{ matrix.tf_version }}
 
   kubevirt:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.ci_job_name }}
     runs-on: ubuntu-20.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: kubevirt centos 7 calico
-            log_dir: /tmp/centos7-cali-${{ github.run_id }}/logs
-
-          - name: kubevirt ubuntu xxx
-            log_dir: /tmp/ubuntu18-xxx-${{ github.run_id }}/logs
+          - ci_job_name: packet_centos8-calico
+            log_dir: /tmp/packet_centos8-calico-${{ github.run_id }}/logs
     env:
-      VIRT_KUBERNETES_VERSION: v1.19.1
-      VIRT_KINDEST_VERSION: v1.19.1@sha256:98cf5288864662e37115e362b23e4369c8c4a408f99cbc06e58ac30ddc721600
+      KUBERNETES_VERSION: v1.19.1
       KUBESPRAY_VERSION: v2.14.1
       ANSIBLE_FORCE_COLOR: "true"
-      SSH_USER: root
+      SSH_USER: kubespray
       MITOGEN_ENABLE: "false"
       ANSIBLE_LOG_LEVEL: "-vv"
 
@@ -180,74 +176,44 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Install a default Python
-        uses: actions/setup-python@v2
-        # TODO version (if really needed ?)
-
-      - name: Enable ipv4 and ipv6 forwarding
-        run: |
-          sudo sysctl -w net.ipv6.conf.all.forwarding=1
-          sudo sysctl -w net.ipv4.ip_forward=1
-
-
-      # TODO : split
       - name: Install docker
-        run: |
-          . /etc/os-release
-          ## FIXME Workaround for https://github.com/kubernetes/kubernetes/issues/61058
-          ### And https://github.com/LiliC/travis-minikube/blob/e0f26f7b388057f51a0e2558afd5f990e07b6c49/.travis.yml#L11
-          sudo mount --make-rshared /
-          ### conntrack is required by kube 1.18
-          sudo apt-get update
-          sudo apt-get install -y conntrack
-          # sudo systemctl stop apparmor
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          sudo apt-get update
-          sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-          sudo apt install -y qemu qemu-kvm libvirt-daemon libvirt-clients bridge-utils virt-manager libvirt-daemon-system dnsmasq
-          sudo systemctl restart libvirtd
-          # Install network
-          sudo mkdir -p /etc/cni/net.d
-          # curl -qsSL https://raw.githubusercontent.com/containers/libpod/master/cni/87-podman-bridge.conflist | sudo tee /etc/cni/net.d/87-podman-bridge.conf
-          curl -qsSL https://github.com/containernetworking/plugins/releases/download/v0.8.6/cni-plugins-linux-amd64-v0.8.6.tgz --output /tmp/cni.tgz
-          sudo mkdir -p /usr/libexec/cni
-          sudo tar -C /usr/libexec/cni -xvzf /tmp/cni.tgz
-
-
-      - name: Tweak Ubuntu apparmor
-        run: |
-          sudo cat /etc/apparmor.d/usr.sbin.libvirtd
-          tweak_qemu_apprarmor="$(head -n -1 /etc/apparmor.d/usr.sbin.libvirtd; echo "  /usr/libexec/qemu-kvm rmix,"; tail -1 /etc/apparmor.d/usr.sbin.libvirtd)"
-          echo "$tweak_qemu_apprarmor"
-          echo "$tweak_qemu_apprarmor" | sudo dd of=/etc/apparmor.d/usr.sbin.libvirtd
-          sudo cat /etc/apparmor.d/usr.sbin.libvirtd
-          sudo systemctl reload apparmor.service
-
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            . /etc/os-release
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+            sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            sudo apt-get update
+            sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
 
       - name: Install kubectl
-        run: |
-          curl -LO https://storage.googleapis.com/kubernetes-release/release/${VIRT_KUBERNETES_VERSION}/bin/linux/amd64/kubectl; chmod +x ./kubectl
-          sudo install kubectl /usr/local/bin
-
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            curl -LO https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION}/bin/linux/amd64/kubectl; chmod +x ./kubectl
+            sudo install kubectl /usr/local/bin
 
       - name: Install kind
-        run: |
-          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.9.0/kind-$(uname)-amd64" && chmod +x ./kind
-          sudo install kind /usr/local/bin
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.9.0/kind-$(uname)-amd64" && chmod +x ./kind
+            sudo install kind /usr/local/bin
 
-
-      - name: Create single node cluster
+      - name: Create single node Cluster
         run: |
           cat <<EOF | sudo kind create cluster -v7 --wait 1m --retain --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           networking:
             ipFamily: ipv4
-          nodes:
-          - image: kindest/node:${VIRT_KINDEST_VERSION}
           EOF
-
 
       - name: Wait and get Cluster status
         run: |
@@ -256,42 +222,66 @@ jobs:
           sudo kubectl get nodes -o wide
           sudo kubectl get pods -A
 
+      - name: Install kubevirt packages requirements
+        run: |
+          sudo apt install -y qemu qemu-kvm libvirt-daemon libvirt-clients bridge-utils virt-manager libvirt-daemon-system
+          sudo systemctl restart libvirtd
+
+      - name: Tweak ubuntu apparmor for Kubevirt
+        run: |
+          # See : https://github.com/kubevirt/kubevirt/issues/4303
+          # Add one magic line and reload service
+          tweak_qemu_apprarmor="$(head -n -1 /etc/apparmor.d/usr.sbin.libvirtd; echo "  /usr/libexec/qemu-kvm rmix,"; tail -1 /etc/apparmor.d/usr.sbin.libvirtd)"
+          echo "$tweak_qemu_apprarmor" | sudo dd of=/etc/apparmor.d/usr.sbin.libvirtd
+          sudo systemctl reload apparmor.service
 
       - name: Install kubevirt
-        run: |
-          sudo kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/v0.36.0/kubevirt-operator.yaml
-          sudo kubectl create configmap kubevirt-config -n kubevirt --from-literal debug.useEmulation=true
-          sudo kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/v0.36.0/kubevirt-cr.yaml
-
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            sudo kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/v0.36.0/kubevirt-operator.yaml
+            sudo kubectl create configmap kubevirt-config -n kubevirt --from-literal debug.useEmulation=true
+            sudo kubectl create -f https://github.com/kubevirt/kubevirt/releases/download/v0.36.0/kubevirt-cr.yaml
 
       - name: Install virtcl
-        run: |
-          export ARCH=linux-amd64
-          curl -L -o virtctl https://github.com/jseguillon/kubevirt/releases/download/9.9.0/virtctl-v0.37.0-rc.0-72-g246eb6f22-linux-amd64
-          chmod +x virtctl
-          sudo install virtctl /usr/local/bin
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            export ARCH=linux-amd64
+            curl -L -o virtctl https://github.com/kubevirt/kubevirt/releases/download/v0.36.0/virtctl-v0.36.0-linux-amd64
+            chmod +x virtctl
+            sudo install virtctl /usr/local/bin
 
-
-      # - name: Build kubespray container
+      # TODO : could build the docker instead of relying to a KUBESPRAY_VERSION(?)
+      # - name: Build kubespray test container
       #   run: |
-      #     docker build --build-arg PYTHON_BASE_IMAGE=${{ matrix.PYTHON_BASE_IMAGE }} --build-arg KUBERNETES_VERSION=${{ matrix.KUBERNETES_VERSION }} . --file tools/Dockerfile  -t molecule_kubevirt_${{ matrix.tox_env }}:latest
-      #     # FIXME : load is slow : set a private registry, as described here https://kind.sigs.k8s.io/docs/user/local-registry/
-      #     sudo kind load docker-image molecule_kubevirt_${{ matrix.tox_env }}:latest
+      #     docker build .  -t kubespray:latest
+      #     # TODO : kind load is slow : set a private registry, as described here https://kind.sigs.k8s.io/docs/user/local-registry/
+      #     sudo kind load docker-image kubespraykubespray:latest
 
-
-      # - name: Push kubespray image to Kind
-      #   run: |
-      #     sudo kind load docker-image molecule_kubevirt_${{ matrix.tox_env }}:latest
-
+      # - name: Push kubespray test image to Kind
+      #   uses: nick-invision/retry@v2
+      #   with:
+      #     timeout_minutes: 5
+      #     max_attempts: 3
+      #     command: |
+      #       sudo kind load docker-image kubespray:latest
 
       - name: Install kail
-        run: |
-          curl -SL https://github.com/boz/kail/releases/download/v0.15.0/kail_0.15.0_linux_amd64.tar.gz -o kail.tar.gz
-          tar xf kail.tar.gz
-          sudo install kail /usr/local/bin
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            curl -SL https://github.com/boz/kail/releases/download/v0.15.0/kail_0.15.0_linux_amd64.tar.gz -o kail.tar.gz
+            tar xf kail.tar.gz
+            sudo install kail /usr/local/bin
 
-
-      - name: Wait and get Kubevirt status
+      - name: Wait and get kubevirt status
         run: |
           # wait network is ready
           sudo kubectl wait --for=condition=ready pods --namespace=kubevirt -l kubevirt.io=virt-operator
@@ -301,57 +291,65 @@ jobs:
           sudo kubectl get nodes -o wide
           sudo kubectl get pods -A
 
+      - name: Launch background log scripts
+        run: |
+          # Kail monitors any logs from default namespace
+          sudo kail -n default 2>&1 > /tmp/kail.log || true &
+          # Infinite script waits for new VMs up and fetch logs from console
+          (
+            while true; do
+            until sudo kubectl wait --for=condition=Ready pod -l kubevirt.io=virt-launcher --namespace default;
+              do echo "Still Waiting Pod to start..."; sleep 5;
+            done
 
-      # - name: Prepare Job
-      #   run: |
-      #     # Service Account for Job
-      #     sudo kubectl create -f tools/test-rolebinding.yaml
-      #     # Configmap will be witinig untill it is deleted, telling one Pod ended the Job
-      #     sudo kubectl create configmap molecule-job-running --from-literal status=Started
+            LOGFILE="virtcl-console-$(date '+%Y-%m-%d-%H-%M-%S').log"
+            echo "Starting virtctl console" >> /tmp/${LOGFILE}
+            sudo script -e -c "virtctl console instance" >> /tmp/${LOGFILE}
+          done
+          ) &
+          # Event router reports any event as log, a great help for troubleshooting since Kind exports all running Pods logs
+          sudo kubectl create -f https://raw.githubusercontent.com/heptiolabs/eventrouter/master/yaml/eventrouter.yaml
 
+      - name: Launch test
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 25
+          max_attempts: 3
+          # on_retry_command: | to add if any
+          command: |
+            export CI_PLATFORM=packet
+            sudo -E tests/scripts/testcases_run.sh
+        env:
+          CI_JOB_NAME: ${{ matrix.ci_job_name }}
 
-      # - name: Start test Job
-      #   run: |
-      #     cat <<EOF | sudo kubectl apply -f -
-      #     ---
-      #     apiVersion: batch/v1
-      #     kind: Job
-      #     metadata:
-      #       name: molecule
-      #     spec:
-      #       template:
-      #         spec:
-      #           serviceAccountName: molecule-kubevirt
-      #           containers:
-      #           - name: molecule
-      #             image: molecule_kubevirt_${{ matrix.tox_env }}
-      #             imagePullPolicy: IfNotPresent
-      #             command: [ "/bin/bash", "-c", "--" ]
-      #             args: ["tox -e ${{ matrix.tox_env }} -c /opt/molecule_kubevirt/tox.ini; kubectl create configmap molecule-result --from-literal exitCode=$? && kubectl delete configmap molecule-job-running"]
-      #             env:
-      #               - name: PYTEST_REQPASS
-      #                 value: "2"
-      #           restartPolicy: Never
-      #       backoffLimit: 0
-      #     EOF
+      - name: Dump and export logs
+        if: always()
+        run: |
+          mkdir -p ${LOG_DIR} || true
+          echo "** Events"
+          sudo kubectl get events | tee ${LOG_DIR}/events.txt || true
+          echo "** Jobs"
+          sudo kubectl describe jobs | tee  ${LOG_DIR}/jobs.txt || true
+          echo "** Configmap"
+          sudo kubectl describe cm | tee ${LOG_DIR}/cm.txt || true
+          echo "** Console log"
+          sudo cat /tmp/virtcl-console*.log || true
 
-      #     echo "Job launched"
+          sudo cp /tmp/kail.log ${LOG_DIR} || true
+          sudo cp /tmp/virtcl-console*.log ${LOG_DIR} || true
+          sudo dmesg > ${LOG_DIR}/dmesg.txt || true
+          sudo kind export logs ${LOG_DIR} || true
+          sudo journalctl | cat > ${LOG_DIR}/journalctl.txt || true
+          sudo chown -R $USER:$USER ${LOG_DIR} || true
+        env:
+          LOG_DIR: /tmp/kubespray-kubevirt/logs
 
-
-      # - name: Wait for Job to end and log Pods in default namespace
-      #   run: |
-      #     # Wait for Job Pod to start
-      #     sudo kubectl wait --for=condition=ready pods -l job-name=molecule --namespace default
-      #     # FIXME : virtctl not working when detached => open issue/PR on kubevirt
-      #     ( sudo kubectl wait --timeout=15m --for=condition=Ready pod -l kubevirt.io=virt-launcher && sudo script -e -c "virtctl console instance" | tee /tmp/virtcl.txt || true ) &
-      #     # Kail sends any logs from default namespace both to stdout and a log file
-      #     ( sudo kail -n default 2>&1 | tee /tmp/kail.log || true ) &
-      #     # Wait for molecule Job to delete configmap and notify one Job Pod as ran till the end
-      #     sudo kubectl wait --for delete --timeout=20m  configmap/molecule-job-running
-      #     # Exit of github action is the one set by molecule job in config map result
-      #     # FIXME not sure its working for exit code part
-      #     exit $(sudo kubectl get configmap molecule-result -o "jsonpath={.data['exitCode']}")
-
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: kubespray-kubevirt-${{ matrix.name }}-${{ github.run_id }}
+          path: /tmp/kubespray-kubevirt/logs
 
       # FIXME : if always ?
       - name: Export logs
@@ -375,7 +373,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v2
         with:
-          name: molecule-kubevirt-${{ matrix.tox_env }}-${{ env.JOB_NAME }}-${{ github.run_id }}
+          name: kubespray-kubevirt-${{ matrix.tox_env }}-${{ env.JOB_NAME }}-${{ github.run_id }}
           path: ${{ matrix.log_dir }}
     needs:
       - validate_code
@@ -451,7 +449,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v2
         with:
-          name: molecule-kubevirt-${{ matrix.tox_env }}-${{ env.JOB_NAME }}-${{ github.run_id }}
+          name: kubespray-kubevirt-${{ matrix.tox_env }}-${{ env.JOB_NAME }}-${{ github.run_id }}
           path: ${{ matrix.log_dir }}
     needs:
       - validate_code
