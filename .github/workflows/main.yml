@@ -171,6 +171,7 @@ jobs:
       SSH_USER: kubespray
       MITOGEN_ENABLE: "false"
       ANSIBLE_LOG_LEVEL: "-vv"
+      UPGRADE_TEST: "false"
 
     steps:
       - name: Check out code
