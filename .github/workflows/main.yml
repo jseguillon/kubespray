@@ -177,6 +177,21 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
+      - name: Rebase
+        run: |
+          # No CI_COMMIT_REF_NAME => find a way to get it ? ./tests/scripts/rebase.sh
+
+      - name: Install a default Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.x"
+          architecture: x64
+
+      - name: Install requirements
+        run: |
+          sudo python3 -m pip install -r tests/requirements.txt
+
+
       - name: Install docker
         uses: nick-invision/retry@v2
         with:
@@ -317,7 +332,7 @@ jobs:
           timeout_minutes: 25
           max_attempts: 3
           # on_retry_command: | to add if any
-          command:
+          command: |
             mkdir -p /home/runner/.ssh/
             export CI_PLATFORM=packet
             sudo -E tests/scripts/testcases_run.sh
