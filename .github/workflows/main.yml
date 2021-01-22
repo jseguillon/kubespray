@@ -317,7 +317,8 @@ jobs:
           timeout_minutes: 25
           max_attempts: 3
           # on_retry_command: | to add if any
-          command: |
+          command:
+            mkdir -p /home/runner/.ssh/
             export CI_PLATFORM=packet
             sudo -E tests/scripts/testcases_run.sh
         env:
