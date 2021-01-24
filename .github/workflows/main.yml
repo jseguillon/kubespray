@@ -163,6 +163,7 @@ jobs:
       matrix:
         include:
           - ci_job_name: packet_centos8-calico
+            upgrade_test: false
             log_dir: /tmp/packet_centos8-calico-${{ github.run_id }}/logs
     env:
       KUBERNETES_VERSION: v1.19.1
@@ -272,20 +273,18 @@ jobs:
             chmod +x virtctl
             sudo install virtctl /usr/local/bin
 
-      # TODO : could build the docker instead of relying to a KUBESPRAY_VERSION(?)
-      # - name: Build kubespray test container
-      #   run: |
-      #     docker build .  -t kubespray:latest
-      #     # TODO : kind load is slow : set a private registry, as described here https://kind.sigs.k8s.io/docs/user/local-registry/
-      #     sudo kind load docker-image kubespraykubespray:latest
+      # TODO : could also rebuild image (?)s
+      - name: Build kubespray test container from version set in matrix plus local source code
+        run: |
+          cat <<EOF > Dockerfile
+          ARG KUBESPRAY_VERSION
+          FROM quay.io/kubespray/kubespray:\${KUBESPRAY_VERSION}
+          COPY . /
+          EOF
 
-      # - name: Push kubespray test image to Kind
-      #   uses: nick-invision/retry@v2
-      #   with:
-      #     timeout_minutes: 5
-      #     max_attempts: 3
-      #     command: |
-      #       sudo kind load docker-image kubespray:latest
+          docker build --build-arg KUBESPRAY_VERSION="${KUBESPRAY_VERSION}" -t kubespray:latest .
+          # TODO : kind load is slow : set a private registry, as described here https://kind.sigs.k8s.io/docs/user/local-registry/
+          sudo kind load docker-image kubespray:latest
 
       - name: Install kail
         uses: nick-invision/retry@v2
@@ -306,6 +305,79 @@ jobs:
           sudo kubectl wait --for=condition=ready pods --namespace=kubevirt -l kubevirt.io=virt-handler || true
           sudo kubectl get nodes -o wide
           sudo kubectl get pods -A
+
+      - name: Prepare Job
+        run: |
+          # Service Account for Job
+          cat <<EOF | sudo kubectl apply -f -
+          ---
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: kubespray-kubevirt
+
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: kubespray-kubevirt
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: kubevirt.io:edit
+          subjects:
+            - kind: ServiceAccount
+              name: kubespray-kubevirt
+              namespace: default
+
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: kubespray-cdi
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: cdi.kubevirt.io:edit
+          subjects:
+            - kind: ServiceAccount
+              name: kubespray-kubevirt
+              namespace: default
+
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: kubespray-kubevirt-sec
+          rules:
+            - apiGroups:
+                - ""
+              resources:
+                - secrets
+                - services
+                - persistentvolumeclaims
+                - pods
+                - pods/log
+                - events
+                - configmaps
+              verbs: ["*"]
+
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: kubespray-kubevirt-sec
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: kubespray-kubevirt-sec
+          subjects:
+            - kind: ServiceAccount
+              name: kubespray-kubevirt
+              namespace: default
+          EOF
+
+          echo "Service account created"
 
       - name: Launch background log scripts
         run: |
@@ -329,13 +401,62 @@ jobs:
       - name: Launch test
         uses: nick-invision/retry@v2
         with:
-          timeout_minutes: 25
+          timeout_minutes: 30
           max_attempts: 3
           # on_retry_command: | to add if any
+          on_retry_command: |
+            sudo kubectl delete pods --all || true
+            sudo kubectl delete configmaps --all || true
+            sudo kubectl delete job --all || true
           command: |
-            mkdir -p /home/runner/.ssh/
-            export CI_PLATFORM=packet
-            sudo -E tests/scripts/testcases_run.sh
+            # Configmap will be waitinig untill it is deleted, telling one Pod ended the Job
+            sudo kubectl create configmap kubespray-job-running --from-literal status=Started
+            # Create Job
+            cat <<EOF | sudo kubectl apply -f -
+            ---
+            apiVersion: batch/v1
+            kind: Job
+            metadata:
+              name: kubespray
+            spec:
+              template:
+                spec:
+                  serviceAccountName: kubespray-kubevirt
+                  containers:
+                  - name: kubespray
+                    image: kubespray:latest
+                    imagePullPolicy: IfNotPresent
+                    command: [ "/bin/bash", "-c", "--" ]
+                    args: ["(mkdir -p /home/runner/.ssh/ export ; /tests/scripts/testcases_run.sh; kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
+                    env:
+                      - name: CI_PLATFORM
+                        value: packet
+                      - name: PY_COLORS
+                        value: '1'
+                      - name: ANSIBLE_FORCE_COLOR
+                        value: '1'
+                      - name: CI_JOB_NAME
+                        value: "${{ matrix.ci_job_name }}"
+                      - name: UPGRADE_TEST
+                        value: "${{ matrix.upgrade_test }}"
+                  restartPolicy: Never
+              backoffLimit: 0
+            EOF
+
+            echo "Job launched"
+
+            # Wait for kubespray Job Pod to start
+            until (sudo kubectl get pods -l job-name=kubespray | grep kubespray); do echo "Wait kubespray pod to start"; sleep 5; done
+
+            sudo kubectl wait --for=condition=ready pods -l job-name=kubespray --namespace default
+            echo "kubespray pod is now running, waiting..."
+
+            # Wait for kubespray Job to delete configmap, notifying one Job Pod ran till the end, whatever the result
+            sudo kubectl wait --for delete --timeout=20m  configmap/kubespray-job-running
+
+            # Get kubespray tests results and exit accordingly
+            kubespray_RESULT=$(sudo kubectl get configmap kubespray-result -o "jsonpath={.data['exitCode']}")
+            if [ ! "${kubespray_RESULT}" == "0" ]; then echo "Test non ok : ${kubespray_RESULT}"; exit 1; fi
         env:
           CI_JOB_NAME: ${{ matrix.ci_job_name }}
 
