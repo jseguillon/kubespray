@@ -352,14 +352,7 @@ jobs:
           rules:
             - apiGroups:
                 - ""
-              resources:
-                - secrets
-                - services
-                - persistentvolumeclaims
-                - pods
-                - pods/log
-                - events
-                - configmaps
+              resources! ["*"]
               verbs: ["*"]
 
           ---
