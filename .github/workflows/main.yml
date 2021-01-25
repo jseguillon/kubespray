@@ -427,7 +427,7 @@ jobs:
                     image: kubespray:latest
                     imagePullPolicy: IfNotPresent
                     command: [ "/bin/bash", "-c", "--" ]
-                    args: ["(mkdir -p /home/runner/.ssh/ export ; /tests/scripts/testcases_run.sh; kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
+                    args: ["(mkdir -p /root/.ssh/ export ; /tests/scripts/testcases_run.sh; kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
                     env:
                       - name: CI_PLATFORM
                         value: packet
