@@ -352,7 +352,7 @@ jobs:
           rules:
             - apiGroups:
                 - ""
-              resources! ["*"]
+              resources: ["*"]
               verbs: ["*"]
 
           ---
