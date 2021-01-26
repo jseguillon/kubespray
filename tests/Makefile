@@ -61,7 +61,7 @@ delete-do:
 
 create-packet: init-packet
 	ansible-playbook cloud_playbooks/create-packet.yml -c local \
-	$(ANSIBLE_LOG_LEVEL) \
+	-vvv \
 	-e @"files/${CI_JOB_NAME}.yml" \
 	-e test_id=$(TEST_ID) \
 	-e inventory_path=$(INVENTORY)
