@@ -20,8 +20,10 @@ export ANSIBLE_REMOTE_USER=$SSH_USER
 export ANSIBLE_BECOME=true
 export ANSIBLE_BECOME_USER=root
 export CI_PLATFORM=packet
-export CI_JOB_NAME=${CI_JOB_NAME}
+export CI_JOB_NAME="${CI_JOB_NAME}"
 export TEST_ID="toto-titi"
+export ANSIBLE_LOG_LEVEL="${ANSIBLE_LOG_LEVEL}"
+
 
 cd tests && make create-${CI_PLATFORM} -s ; cd -
 ansible-playbook tests/cloud_playbooks/wait-for-ssh.yml
