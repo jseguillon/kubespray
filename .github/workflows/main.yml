@@ -426,8 +426,8 @@ jobs:
                         value: packet
                       - name: SSH_USER
                         value: kubespray
-                      - name: PY_COLORS
-                        value: '1'
+                      - name: ANSIBLE_LOG_LEVEL
+                        value: '-vv'
                       - name: ANSIBLE_FORCE_COLOR
                         value: '1'
                       - name: CI_JOB_NAME
