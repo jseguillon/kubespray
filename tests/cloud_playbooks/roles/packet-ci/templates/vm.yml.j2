@@ -29,16 +29,16 @@ spec:
           - name: default
             bridge: {}
         cpu:
-            cores: {{ vm_cpu_cores }}
-            sockets: {{ vm_cpu_sockets }}
+            cores: "{{ vm_cpu_cores }}"
+            sockets: "{{ vm_cpu_sockets }}"
             threads: {{ vm_cpu_cores }}
         resources:
           requests:
-            memory: {{ vm_memory * memory_allocation_ratio }}
-            cpu: {{ vm_cpu_cores * cpu_allocation_ratio }}
+            memory: "{{ vm_memory * memory_allocation_ratio }}"
+            cpu: "{{ vm_cpu_cores * cpu_allocation_ratio }}"
           limits:
-            memory: {{ vm_memory }}
-            cpu: 2.0
+            memory: "{{ vm_memory }}"
+            cpu: "{{ vm_cpu_cores }}"
       networks:
       - name: default
         pod: {}
