@@ -276,13 +276,7 @@ jobs:
       # TODO : could also rebuild image (?)s
       - name: Build kubespray test container from version set in matrix plus local source code
         run: |
-          cat <<EOF > Dockerfile
-          ARG KUBESPRAY_VERSION
-          FROM quay.io/kubespray/kubespray:\${KUBESPRAY_VERSION}
-          COPY . /
-          EOF
-
-          docker build --build-arg KUBESPRAY_VERSION="${KUBESPRAY_VERSION}" -t kubespray:latest .
+          docker build --build-arg KUBE_VERSION="v1.20.2" -t kubespray:latest .
           # TODO : kind load is slow : set a private registry, as described here https://kind.sigs.k8s.io/docs/user/local-registry/
           sudo kind load docker-image kubespray:latest
 
@@ -420,7 +414,7 @@ jobs:
                     image: kubespray:latest
                     imagePullPolicy: IfNotPresent
                     command: [ "/bin/bash", "-c", "--" ]
-                    args: ["(mkdir -p /root/.ssh/ ; /tests/scripts/testcases_run.sh; grep '' /tmp/toto-titi/*;  kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
+                    args: ["tree; (mkdir -p /root/.ssh/ ; /tests/scripts/testcases_run.sh; grep '' /tmp/toto-titi/*;  kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
                     env:
                       - name: CI_PLATFORM
                         value: packet
