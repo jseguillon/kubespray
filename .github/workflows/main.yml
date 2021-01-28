@@ -414,7 +414,7 @@ jobs:
                     image: kubespray:latest
                     imagePullPolicy: IfNotPresent
                     command: [ "/bin/bash", "-c", "--" ]
-                    args: ["tree; (mkdir -p /root/.ssh/ ; tests/scripts/testcases_run.sh; grep '' /tmp/toto-titi/*;  kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
+                    args: ["(mkdir -p /root/.ssh/ ; /kubespray/tests/scripts/testcases_run.sh; grep '' /tmp/toto-titi/*;  kubectl create configmap kubespray-result --from-literal exitCode=\$?); kubectl delete configmap kubespray-job-running"]
                     env:
                       - name: CI_PLATFORM
                         value: packet
