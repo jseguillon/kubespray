@@ -38,7 +38,7 @@ spec:
             cpu: {{ vm_cpu_cores * cpu_allocation_ratio }}
           limits:
             memory: {{ vm_memory }}
-            cpu: {{ vm_cpu_cores }}
+            cpu: {{ vm_cpu_cores * 1.0 }}
       networks:
       - name: default
         pod: {}
