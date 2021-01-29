@@ -428,6 +428,8 @@ jobs:
                         value: "${{ matrix.ci_job_name }}"
                       - name: UPGRADE_TEST
                         value: "${{ matrix.upgrade_test }}"
+                      - name: MITOGEN_ENABLE
+                        value: "false"
                   restartPolicy: Never
               backoffLimit: 0
             EOF
