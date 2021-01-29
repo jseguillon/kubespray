@@ -30,7 +30,7 @@
     index_var: vm_id
 
 - name: Wait for vms to have ipaddress assigned
-  shell: "set -o pipefail && kubectl get vmis -n {{ test_name }} instance-{{ vm_id }} -o json | jq '.status.interfaces[].ipAddress' | tr -d '\"'"
+  shell: "kubectl describe vmis -n {{ test_name }};  kubectl describe pods -n {{ test_name }}; set -o pipefail && kubectl get vmis -n {{ test_name }} instance-{{ vm_id }} -o json | jq '.status.interfaces[].ipAddress' | tr -d '\"'"
   args:
     executable: /bin/bash
   changed_when: false
@@ -39,7 +39,7 @@
   loop_control:
     index_var: vm_id
   retries: 20
-  delay: 15
+  delay: 45
   until:
     - vm_ips.stdout | ipaddr
 
