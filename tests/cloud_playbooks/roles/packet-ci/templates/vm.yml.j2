@@ -29,8 +29,8 @@ spec:
           - name: default
             bridge: {}
         cpu:
-            cores: "{{ vm_cpu_cores }}"
-            sockets: "{{ vm_cpu_sockets }}"
+            cores: {{ vm_cpu_cores }}
+            sockets: {{ vm_cpu_sockets }}
             threads: {{ vm_cpu_cores }}
         resources:
           requests:
