@@ -162,7 +162,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - ci_job_name: packet_centos8-calico
+          - ci_job_name: packet_ubuntu18-calico-aio
             upgrade_test: false
             log_dir: /tmp/packet_centos8-calico-${{ github.run_id }}/logs
     env:
