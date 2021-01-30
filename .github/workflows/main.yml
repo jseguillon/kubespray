@@ -430,6 +430,8 @@ jobs:
                         value: "${{ matrix.upgrade_test }}"
                       - name: MITOGEN_ENABLE
                         value: "false"
+                      - name: CI_TEST_REGISTRY_MIRROR
+                        value: "./tests/common/_docker_hub_registry_mirror.yml"
                   restartPolicy: Never
               backoffLimit: 0
             EOF
