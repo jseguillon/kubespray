@@ -432,6 +432,22 @@ jobs:
                         value: "false"
                       - name: CI_TEST_REGISTRY_MIRROR
                         value: "./tests/common/_docker_hub_registry_mirror.yml"
+                      - name: CI_TEST_VARS
+                        value: "./tests/files/${{ matrix.ci_job_name }}.yml"
+                      - name: ANSIBLE_KEEP_REMOTE_FILES
+                        value: "1"
+                      - name: ANSIBLE_CONFIG
+                        value: ./tests/ansible.cfg
+                      - name: ANSIBLE_INVENTORY
+                        value: "./inventory/sample/${{ matrix.ci_job_name }}-BUILD_NUMBER_TODO.ini
+                      - name: IDEMPOT_CHECK
+                        value: "false"
+                      - name: RESET_CHECK
+                        value: "false"
+                      - name: UPGRADE_TEST
+                        value: "false"
+                      - name: MITOGEN_ENABLE
+                        value: "false"
                   restartPolicy: Never
               backoffLimit: 0
             EOF
