@@ -439,7 +439,7 @@ jobs:
                       - name: ANSIBLE_CONFIG
                         value: ./tests/ansible.cfg
                       - name: ANSIBLE_INVENTORY
-                        value: "./inventory/sample/${{ matrix.ci_job_name }}-BUILD_NUMBER_TODO.ini
+                        value: "./inventory/sample/${{ matrix.ci_job_name }}-BUILD_NUMBER_TODO.ini"
                       - name: IDEMPOT_CHECK
                         value: "false"
                       - name: RESET_CHECK
